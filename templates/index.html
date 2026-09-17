@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Control de Gastos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="container mt-4">
+
+    <h2 class="text-center mb-4">💰 Control de Gastos</h2>
+
+    <h3>Cambiar mes</h3>
+
+        <form action="/cambiar_mes" method="POST" onsubmit="return confirmarCambio()">
+            <label>Mes:</label>
+            <input type="number" name="mes" min="1" max="12" required>
+
+            <label>Año:</label>
+            <input type="number" name="anio" required>
+
+            <button type="submit">Cambiar mes</button>
+        </form>
+
+        <p><strong>Mes actual:</strong> {{ mes }} / {{ anio }}</p>
+
+        <script>
+        function confirmarCambio() {
+            return confirm("Se va a crear un backup. ¿Continuar?");
+        }
+    </script>
+
+    <form method="get" class="row mb-3">
+        <div class="col-5">
+            <input type="number" name="mes" value="{{ mes }}" class="form-control" placeholder="Mes (01-12)">
+        </div>
+        <div class="col-5">
+            <input type="number" name="anio" value="{{ anio }}" class="form-control" placeholder="Año">
+        </div>
+        <div class="col-2">
+            <button class="btn btn-primary w-100">Ver</button>
+        </div>
+    </form>
+
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">Agregar ingreso</div>
+        <div class="card-body">
+            <form action="/agregar_ingreso" method="post">
+                <div class="mb-2">
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" class="form-control">
+                </div>
+
+                <div class="mb-2">
+                    <label>Descripción</label>
+                    <input type="text" name="descripcion" class="form-control" placeholder="Sueldo / Devolución / Extra">
+                </div>
+
+                <div class="mb-2">
+                    <label>Monto</label>
+                    <input type="number" step="0.01" name="monto" class="form-control">
+                </div>
+
+                <button type="submit" class="btn btn-success w-100">Guardar ingreso</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header">Ingresos del mes</div>
+        <div class="card-body">
+            <table class="table">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Descripción</th>
+                    <th>Monto</th>
+                    <th>Acciones</th>
+                </tr>
+
+                {% for ing in ingresos %}
+                <tr>
+                    <td>{{ ing[1] }}</td>
+                    <td>{{ ing[2] }}</td>
+                    <td>${{ "%.2f"|format(ing[3]) }}</td>
+                    <td>
+                        <a href="/editar_ingreso/{{ ing[0] }}" class="btn btn-warning btn-sm">Editar</a>
+                        <a href="/eliminar_ingreso/{{ ing[0] }}" class="btn btn-danger btn-sm">Eliminar</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="row text-center mb-4">
+        <div class="col-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6>Ingresos</h6>
+                    <h4>${{ "%.2f"|format(total_ingresos) }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6>Gastos</h6>
+                    <h4>${{ "%.2f"|format(total_gastos) }}</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6>Saldo</h6>
+                    <h4>${{ "%.2f"|format(total_ingresos - total_gastos) }}</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="card mb-3">
+        <div class="card-header">Nueva categoría</div>
+            <div class="card-body">
+                <form action="/agregar_categoria" method="post">
+                    <input type="text" name="nombre" class="form-control mb-2" placeholder="Nombre categoría">
+                    <button type="submit" class="btn btn-secondary w-100">Agregar categoría</button>
+                </form>
+            </div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="card mb-4">
+        <div class="card-header">Agregar gasto</div>
+        <div class="card-body">
+            <form action="/agregar" method="post">
+                
+                <div class="mb-2">
+                    <label>Fecha</label>
+                    <input type="date" name="fecha" class="form-control">
+                </div>
+
+                <div class="mb-2">
+                    <label>Descripción</label>
+                    <input type="text" name="descripcion" class="form-control">
+                </div>
+                <div class="mb-2">
+                    <label>Categoría</label>
+                    <select name="categoria" class="form-control">
+                        {% for cat in categorias %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label>Monto</label>
+                    <input type="number" step="0.01" name="monto" class="form-control">
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100">Guardar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card">
+        <div class="card-header">Lista de gastos</div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Descripción</th>
+                        <th>Categoría</th>
+                        <th>Monto</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for gasto in gastos %}
+                    <tr>
+                        <td>{{ gasto[1] }}</td>
+                        <td>{{ gasto[2] }}</td>
+                        <td>{{ gasto[3] }}</td>
+                        <td>${{ gasto[4] }}</td>
+                        <td>
+                            <a href="/editar_gasto/{{ gasto[0] }}" class="btn btn-warning btn-sm">Editar</a>
+                            <a href="/eliminar/{{ gasto[0] }}" class="btn btn-danger btn-sm">Eliminar</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

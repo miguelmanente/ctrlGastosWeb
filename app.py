@@ -3,11 +3,24 @@ import sqlite3
 import shutil
 import os
 from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.secret_key = "clave_secreta"
 
 def conectar():
+    # Lee la variable de entorno de Render; si no existe, usa SQLite local
+    db_url = os.environ.get('DATABASE_URL', 'sqlite:///gastos.db')
+
+    # Corregir prefijo si Render entrega 'postgres://' en vez de 'postgresql://'
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = db_url
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    db = SQLAlchemy(app)
+
     conn = sqlite3.connect("gastos.db", timeout=10)
     conn.execute("PRAGMA journal_mode=WAL;")
     return conn

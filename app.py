@@ -1,26 +1,66 @@
-import os
-import sqlite3
-import shutil
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+import os
+import shutil
+import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
 
-# Lee la URL de PostgreSQL desde la variable de entorno de Render
+# Lee la URL de PostgreSQL configurada en Render
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def conectar():
     if DATABASE_URL:
         import psycopg2
-        # Render usa 'postgres://', pero psycopg2 requiere 'postgresql://'
+        # Render entrega 'postgres://', pero psycopg2 requiere 'postgresql://'
         url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
         conn = psycopg2.connect(url)
         return conn
     else:
-        # Si no hay variable de entorno, usa SQLite local en tu PC
+        # Modo local en tu PC usando SQLite
         conn = sqlite3.connect("gastos.db", timeout=10)
         conn.execute("PRAGMA journal_mode=WAL;")
         return conn
+
+def inicializar_db():
+    """Crea automáticamente las tablas en PostgreSQL o SQLite si no existen."""
+    conn = conectar()
+    cursor = conn.cursor()
+    
+    is_postgres = DATABASE_URL is not None
+    pk_type = "SERIAL PRIMARY KEY" if is_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS gastos (
+            id {pk_type},
+            fecha DATE NOT NULL,
+            descripcion TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            monto NUMERIC(10, 2) NOT NULL
+        );
+    """)
+
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS ingresos (
+            id {pk_type},
+            fecha DATE NOT NULL,
+            descripcion TEXT NOT NULL,
+            monto NUMERIC(10, 2) NOT NULL
+        );
+    """)
+
+    cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS categorias (
+            id {pk_type},
+            nombre TEXT UNIQUE NOT NULL
+        );
+    """)
+
+    conn.commit()
+    conn.close()
+
+# Inicializa la base de datos al arrancar la aplicación
+inicializar_db()
 
 @app.route("/")
 def index():
@@ -36,15 +76,14 @@ def index():
     cursor = conn.cursor()
 
     is_postgres = DATABASE_URL is not None
-    param = "%s" if is_postgres else "?"
 
-    # Sintaxis de filtrado de fecha según la base de datos
+    # Adaptación de consultas según el motor de base de datos
     if is_postgres:
         filtro_fecha = "TO_CHAR(fecha, 'MM') = %s AND TO_CHAR(fecha, 'YYYY') = %s"
     else:
         filtro_fecha = "strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
 
-    # INGRESOS DEL MES
+    # LISTA INGRESOS
     cursor.execute(f"""
         SELECT id, fecha, descripcion, monto
         FROM ingresos
@@ -123,10 +162,11 @@ def agregar_ingreso():
 
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute("""
+    cursor.execute(f"""
         INSERT INTO ingresos (fecha, descripcion, monto)
-        VALUES (?, ?, ?)
+        VALUES ({param}, {param}, {param})
     """, (fecha, descripcion, monto))
 
     conn.commit()
@@ -138,25 +178,25 @@ def agregar_ingreso():
 def editar_ingreso(id):
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
     if request.method == "POST":
         fecha = request.form["fecha"]
         descripcion = request.form["descripcion"]
         monto = request.form["monto"]
 
-        cursor.execute("""
+        cursor.execute(f"""
             UPDATE ingresos
-            SET fecha=?, descripcion=?, monto=?
-            WHERE id=?
+            SET fecha={param}, descripcion={param}, monto={param}
+            WHERE id={param}
         """, (fecha, descripcion, monto, id))
 
         conn.commit()
         conn.close()
         return redirect("/")
 
-    cursor.execute("SELECT fecha, descripcion, monto FROM ingresos WHERE id=?", (id,))
+    cursor.execute(f"SELECT fecha, descripcion, monto FROM ingresos WHERE id={param}", (id,))
     ingreso = cursor.fetchone()
-
     conn.close()
 
     return render_template("editar_ingreso.html", ingreso=ingreso, id=id)
@@ -165,6 +205,7 @@ def editar_ingreso(id):
 def editar_gasto(id):
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
     if request.method == "POST":
         fecha = request.form["fecha"]
@@ -172,22 +213,21 @@ def editar_gasto(id):
         categoria = request.form["categoria"]
         monto = request.form["monto"]
 
-        cursor.execute("""
+        cursor.execute(f"""
             UPDATE gastos
-            SET fecha=?, descripcion=?, categoria=?, monto=?
-            WHERE id=?
+            SET fecha={param}, descripcion={param}, categoria={param}, monto={param}
+            WHERE id={param}
         """, (fecha, descripcion, categoria, monto, id))
 
         conn.commit()
         conn.close()
         return redirect("/")
 
-    cursor.execute("SELECT fecha, descripcion, categoria, monto FROM gastos WHERE id=?", (id,))
+    cursor.execute(f"SELECT fecha, descripcion, categoria, monto FROM gastos WHERE id={param}", (id,))
     gasto = cursor.fetchone()
 
     cursor.execute("SELECT nombre FROM categorias")
     categorias = cursor.fetchall()
-
     conn.close()
 
     return render_template("editar_gasto.html", gasto=gasto, categorias=categorias, id=id)
@@ -196,9 +236,9 @@ def editar_gasto(id):
 def eliminar_ingreso(id):
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute("DELETE FROM ingresos WHERE id = ?", (id,))
-
+    cursor.execute(f"DELETE FROM ingresos WHERE id = {param}", (id,))
     conn.commit()
     conn.close()
 
@@ -210,9 +250,9 @@ def agregar_categoria():
 
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute("INSERT INTO categorias (nombre) VALUES (?)", (nombre,))
-
+    cursor.execute(f"INSERT INTO categorias (nombre) VALUES ({param})", (nombre,))
     conn.commit()
     conn.close()
 
@@ -222,40 +262,31 @@ def agregar_categoria():
 def eliminar(id):
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute("DELETE FROM gastos WHERE id = ?", (id,))
-
+    cursor.execute(f"DELETE FROM gastos WHERE id = {param}", (id,))
     conn.commit()
     conn.close()
 
     return redirect("/")
-
 
 @app.route("/cambiar_mes", methods=["POST"])
 def cambiar_mes():
     mes = request.form.get("mes")
     anio = request.form.get("anio")
 
-    # Backup (esto sí está perfecto)
-    archivo = hacer_backup()
-
-    # Redirigir pasando mes y año por URL
+    hacer_backup()
     return redirect(url_for("index", mes=mes, anio=anio))
 
 def hacer_backup():
-    fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-
-    carpeta = "backups"
-    os.makedirs(carpeta, exist_ok=True)
-
+    """Realiza una copia local solo si el archivo SQLite existe."""
     origen = "gastos.db"
-    destino = f"{carpeta}/gastos_{fecha}.db"
-
-    shutil.copy2(origen, destino)
-
-    return destino
-
+    if os.path.exists(origen):
+        fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        carpeta = "backups"
+        os.makedirs(carpeta, exist_ok=True)
+        destino = f"{carpeta}/gastos_{fecha}.db"
+        shutil.copy2(origen, destino)
 
 if __name__ == "__main__":
-    #app.run(debug=True)
     app.run(host='127.0.0.1', port=5000, debug=True)

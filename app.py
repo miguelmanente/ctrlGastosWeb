@@ -1,28 +1,26 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+import os
 import sqlite3
 import shutil
-import os
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
-from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
-app.secret_key = "clave_secreta"
-# Lee la variable de entorno de Render; si no existe, usa SQLite local
-db_url = os.environ.get('DATABASE_URL', 'sqlite:///gastos.db')
 
-# Corregir prefijo si Render entrega 'postgres://' en vez de 'postgresql://'
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
-app.config['SQLALCHEMY_DATABASE_URI'] = db_url
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-db = SQLAlchemy(app)
+# Lee la URL de PostgreSQL desde la variable de entorno de Render
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 def conectar():
-    conn = sqlite3.connect("gastos.db", timeout=10)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    return conn
+    if DATABASE_URL:
+        import psycopg2
+        # Render usa 'postgres://', pero psycopg2 requiere 'postgresql://'
+        url = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        conn = psycopg2.connect(url)
+        return conn
+    else:
+        # Si no hay variable de entorno, usa SQLite local en tu PC
+        conn = sqlite3.connect("gastos.db", timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        return conn
 
 @app.route("/")
 def index():
@@ -30,7 +28,6 @@ def index():
     anio = request.args.get("anio")
 
     if not mes:
-        from datetime import datetime
         hoy = datetime.now()
         mes = hoy.strftime("%m")
         anio = hoy.strftime("%Y")
@@ -38,44 +35,50 @@ def index():
     conn = conectar()
     cursor = conn.cursor()
 
-    # INGRESOS DEL MES (lista)
-    cursor.execute("""
+    is_postgres = DATABASE_URL is not None
+    param = "%s" if is_postgres else "?"
+
+    # Sintaxis de filtrado de fecha según la base de datos
+    if is_postgres:
+        filtro_fecha = "TO_CHAR(fecha, 'MM') = %s AND TO_CHAR(fecha, 'YYYY') = %s"
+    else:
+        filtro_fecha = "strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ?"
+
+    # INGRESOS DEL MES
+    cursor.execute(f"""
         SELECT id, fecha, descripcion, monto
         FROM ingresos
-        WHERE strftime('%m', fecha) = ?
-        AND strftime('%Y', fecha) = ?
+        WHERE {filtro_fecha}
         ORDER BY fecha DESC
     """, (mes, anio))
-
     ingresos = cursor.fetchall()
 
-    # INGRESOS
-    cursor.execute("""
+    # TOTAL INGRESOS
+    cursor.execute(f"""
         SELECT SUM(monto) FROM ingresos
-        WHERE strftime('%m', fecha) = ?
-        AND strftime('%Y', fecha) = ?
+        WHERE {filtro_fecha}
     """, (mes, anio))
-    total_ingresos = cursor.fetchone()[0] or 0
+    res_ing = cursor.fetchone()
+    total_ingresos = res_ing[0] if res_ing and res_ing[0] is not None else 0
 
-    # GASTOS
-    cursor.execute("""
+    # TOTAL GASTOS
+    cursor.execute(f"""
         SELECT SUM(monto) FROM gastos
-        WHERE strftime('%m', fecha) = ?
-        AND strftime('%Y', fecha) = ?
+        WHERE {filtro_fecha}
     """, (mes, anio))
-    total_gastos = cursor.fetchone()[0] or 0
+    res_gast = cursor.fetchone()
+    total_gastos = res_gast[0] if res_gast and res_gast[0] is not None else 0
 
     # LISTA GASTOS
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT id, fecha, descripcion, categoria, monto
         FROM gastos
-        WHERE strftime('%m', fecha) = ?
-        AND strftime('%Y', fecha) = ?
+        WHERE {filtro_fecha}
         ORDER BY fecha DESC
     """, (mes, anio))
     gastos = cursor.fetchall()
 
-    # Categorías
+    # CATEGORÍAS
     cursor.execute("SELECT nombre FROM categorias ORDER BY nombre")
     categorias = [fila[0] for fila in cursor.fetchall()]
 
@@ -91,7 +94,6 @@ def index():
         anio=anio
     )
 
-
 @app.route("/agregar", methods=["POST"])
 def agregar():
     fecha = request.form["fecha"]
@@ -101,10 +103,11 @@ def agregar():
 
     conn = conectar()
     cursor = conn.cursor()
+    param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute("""
+    cursor.execute(f"""
         INSERT INTO gastos (fecha, descripcion, categoria, monto)
-        VALUES (?, ?, ?, ?)
+        VALUES ({param}, {param}, {param}, {param})
     """, (fecha, descripcion, categoria, monto))
 
     conn.commit()
@@ -255,4 +258,4 @@ def hacer_backup():
 
 if __name__ == "__main__":
     #app.run(debug=True)
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host='127.0.0.1', port=5000, debug=True)

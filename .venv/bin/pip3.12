@@ -1,4 +1,4 @@
-#!/home/miguelangel/python/ctrlGastosWeb/.venv/bin/python
+#!/home/miguelangel/Escritorio/ctrlGastosWeb/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys

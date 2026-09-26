@@ -5,6 +5,7 @@ import sqlite3
 from datetime import datetime
 
 app = Flask(__name__)
+app.secret_key = "clave_secreta_para_flash_messages"
 
 # Lee la URL de PostgreSQL configurada en Render
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -246,17 +247,31 @@ def eliminar_ingreso(id):
 
 @app.route("/agregar_categoria", methods=["POST"])
 def agregar_categoria():
-    nombre = request.form["nombre"]
+    # .strip() elimina espacios en blanco al inicio y al final
+    nombre = request.form.get("nombre", "").strip()
+
+    # 1. Validar que el campo no esté vacío
+    if not nombre:
+        flash("El nombre de la categoría no puede estar vacío.", "warning")
+        return redirect("/")
 
     conn = conectar()
     cursor = conn.cursor()
     param = "%s" if DATABASE_URL else "?"
 
-    cursor.execute(f"INSERT INTO categorias (nombre) VALUES ({param})", (nombre,))
-    conn.commit()
-    conn.close()
+    # 2. Capturar excepciones de la base de datos
+    try:
+        cursor.execute(f"INSERT INTO categorias (nombre) VALUES ({param})", (nombre,))
+        conn.commit()
+        flash("Categoría agregada exitosamente.", "success")
+    except Exception as e:
+        conn.rollback() # Revierte la transacción en caso de error
+        flash("La categoría ya existe o no se pudo guardar.", "danger")
+    finally:
+        conn.close() # Garantiza que la conexión siempre se cierre
 
     return redirect("/")
+
 
 @app.route("/eliminar/<int:id>")
 def eliminar(id):

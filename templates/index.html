@@ -128,9 +128,9 @@
     <div class="card mb-3">
         <div class="card-header">Nueva categoría</div>
             <div class="card-body">
-                <form action="/agregar_categoria" method="post">
-                    <input type="text" name="nombre" class="form-control mb-2" placeholder="Nombre categoría">
-                    <button type="submit" class="btn btn-secondary w-100">Agregar categoría</button>
+                <form action="/agregar_categoria" method="POST">
+                    <input type="text" name="nombre" placeholder="Nombre de categoría" required>
+                    <button type="submit">Agregar Categoría</button>
                 </form>
             </div>
     </div>
@@ -153,9 +153,18 @@
                 <div class="mb-2">
                     <label>Categoría</label>
                     <select name="categoria" class="form-control">
-                        {% for cat in categorias %}
+                     {% for cat in categorias %}
                         <option value="{{ cat }}">{{ cat }}</option>
                         {% endfor %}
+                        <!--{% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">
+                                    {{ message }}
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}-->
                     </select>
                 </div>
 

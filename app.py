@@ -288,5 +288,27 @@ def hacer_backup():
         destino = f"{carpeta}/gastos_{fecha}.db"
         shutil.copy2(origen, destino)
 
+@app.route("/test_db")
+def test_db():
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        
+        # Probar si la conexión funciona
+        cursor.execute("SELECT 1;")
+        res = cursor.fetchone()
+        
+        # Ver qué motor está usando
+        engine = "PostgreSQL" if DATABASE_URL else "SQLite"
+        
+        # Ver si existen las tablas
+        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public';" if DATABASE_URL else "SELECT name FROM sqlite_master WHERE type='table';")
+        tablas = cursor.fetchall()
+        
+        conn.close()
+        return f"<h1>¡Conexión Exitosa!</h1><p>Motor: {engine}</p><p>Tablas encontradas: {tablas}</p>"
+    except Exception as e:
+        return f"<h1>Error de Conexión:</h1><p>{str(e)}</p>"
+
 if __name__ == "__main__":
     app.run(host='127.0.0.1', port=5000, debug=True)

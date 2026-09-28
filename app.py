@@ -1,8 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, send_file, render_template, request, redirect, url_for, session, flash
 import os
 import shutil
 import sqlite3
 from datetime import datetime
+
 
 app = Flask(__name__)
 app.secret_key = "clave_secreta_para_flash_messages"
@@ -285,23 +286,43 @@ def eliminar(id):
 
     return redirect("/")
 
+#@app.route("/cambiar_mes", methods=["POST"])
+#def cambiar_mes():
+    #mes = request.form.get("mes")
+    #anio = request.form.get("anio")
+
+    #hacer_backup()
+    #return redirect(url_for("index", mes=mes, anio=anio))
+
+
 @app.route("/cambiar_mes", methods=["POST"])
 def cambiar_mes():
     mes = request.form.get("mes")
     anio = request.form.get("anio")
 
-    hacer_backup()
-    return redirect(url_for("index", mes=mes, anio=anio))
-
-def hacer_backup():
-    """Realiza una copia local solo si el archivo SQLite existe."""
     origen = "gastos.db"
     if os.path.exists(origen):
         fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        carpeta = "backups"
-        os.makedirs(carpeta, exist_ok=True)
-        destino = f"{carpeta}/gastos_{fecha}.db"
-        shutil.copy2(origen, destino)
+        nombre_descarga = f"gastos_backup_{fecha}.db"
+        
+        return send_file(
+            origen,
+            as_attachment=True,
+            download_name=nombre_descarga,
+            mimetype="application/x-sqlite3"
+        )
+
+    return redirect(url_for("index", mes=mes, anio=anio))
+
+#def hacer_backup():
+    """Realiza una copia local solo si el archivo SQLite existe."""
+    #origen = "gastos.db"
+    #if os.path.exists(origen):
+    #    fecha = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    #    carpeta = "backups"
+    #    os.makedirs(carpeta, exist_ok=True)
+    #    destino = f"{carpeta}/gastos_{fecha}.db"
+    #    shutil.copy2(origen, destino)
 
 @app.route("/test_db")
 def test_db():
